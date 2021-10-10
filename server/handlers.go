@@ -13,7 +13,10 @@ import (
 	"sync"
 )
 
-const maxUrlsCount = 20
+const (
+	maxUrlsCount            = 20
+	maxSimultaneousRequests = 4
+)
 
 type ReqBody struct {
 	Urls []string `json:"urls"`
@@ -42,9 +45,14 @@ func (s *Server) Contents(w http.ResponseWriter, req *http.Request) {
 
 	var urlContents sync.Map
 	g, ctx := errgroup.WithContext(req.Context())
+	sem := make(chan struct{}, maxSimultaneousRequests)
 	for _, u := range reqBody.Urls {
 		u := u
+		sem <- struct{}{}
 		g.Go(func() error {
+			defer func() {
+				<-sem
+			}()
 			log.Printf("url: %s, start...", u)
 			urlContent, err := s.getContent(ctx, u)
 			if err != nil {
